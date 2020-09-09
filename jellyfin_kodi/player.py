@@ -23,6 +23,8 @@ class Player(xbmc.Player):
 
     played = {}
     up_next = False
+    
+    current_file = None
 
     def __init__(self):
         xbmc.Player.__init__(self)
@@ -299,18 +301,24 @@ class Player(xbmc.Player):
             LOG.debug("--<[ paused ]")
 
     def onPlayBackSeek(self, time, seek_offset):
-
-        ''' Does not seem to work in Leia??
+        ''' 
+        Kodi calls this when the user seeks during video playback.
+        Will be called when user seeks to a time.
+        Parameters
+        time	    [integer] Time to seek to.
+        seekOffset	[integer] The magnitude of time shifted.
+        More documentation is available here: https://codedocs.xyz/xbmc/xbmc/group__python___player_c_b.html#ga68978e1dd9c1c1fbd562ff2feb5fb6a7
         '''
-        if self.is_playing_file(self.get_playing_file()):
-
-            self.report_playback()
-            LOG.info("--[ seek ]")
+        # Log first.
+        LOG.info("--[ seek ]")
+        # Not required, kodi only calls this if the user is already viewing.
+        # if self.is_playing_file(self.get_playing_file()):
+        current_file['CurrentPosition'] = time
+        self.report_playback() 
 
     def report_playback(self, report=True):
 
         ''' Report playback progress to jellyfin server.
-            Check if the user seek.
         '''
         current_file = self.get_playing_file()
 
@@ -322,33 +330,33 @@ class Player(xbmc.Player):
         if window('jellyfin.external.bool'):
             return
 
-        if not report:
-
-            previous = item['CurrentPosition']
-            item['CurrentPosition'] = int(self.getTime())
-
-            if int(item['CurrentPosition']) == 1:
-                return
-
-            try:
-                played = float(item['CurrentPosition'] * 10000000) / int(item['Runtime']) * 100
-            except ZeroDivisionError:  # Runtime is 0.
-                played = 0
-
-            if played > 2.0 and not self.up_next:
-
-                self.up_next = True
-                self.next_up()
-
-            if (item['CurrentPosition'] - previous) < 30:
-
-                return
+#         if not report: This is never called (Probably should be though?)
+#
+#             previous = item['CurrentPosition']
+#             item['CurrentPosition'] = int(self.getTime())
+#
+#             if int(item['CurrentPosition']) == 1:
+#                 return
+#
+#             try:
+#                 played = float(item['CurrentPosition'] * 10000000) / int(item['Runtime']) * 100
+#             except ZeroDivisionError:  # Runtime is 0.
+#                 played = 0
+#
+#             if played > 2.0 and not self.up_next:
+#
+#                 self.up_next = True
+#                 self.next_up()
+#
+#             if (item['CurrentPosition'] - previous) < 30:
+#
+#                 return
 
         result = JSONRPC('Application.GetProperties').execute({'properties': ["volume", "muted"]})
         result = result.get('result', {})
         item['Volume'] = result.get('volume')
         item['Muted'] = result.get('muted')
-        item['CurrentPosition'] = int(self.getTime())
+        # item['CurrentPosition'] = int(self.getTime()) This doesn't work with seek... Probably
         self.detect_audio_subs(item)
 
         data = {
